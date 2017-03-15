@@ -14,5 +14,8 @@ if __name__ == "__main__":
         for user in users:
             if 'name' in user and user.get('name') == BOT_NAME:
                 print("Bot ID for '" + user['name'] + "' is " + user.get('id'))
+                break
+        else:
+            print("could not find bot user with the name " + BOT_NAME)
     else:
-        print("could not find bot user with the name " + BOT_NAME)
+        print("could not find bot user because api_call did not return 'ok'")

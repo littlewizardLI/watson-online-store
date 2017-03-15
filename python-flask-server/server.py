@@ -14,10 +14,6 @@ thread = None
 namespace = '/test'
 
 
-# Initialize the store with its Bluemix services
-watson = WatsonEnv.get_watson_online_store()
-
-
 @app.route('/js/<path:path>')
 def send_js(path):
     return send_from_directory('js', path)
@@ -68,9 +64,16 @@ def do_disconnect():
 if __name__ == '__main__':
     port = os.environ.get("PORT")
 
+
+    # Initialize the store with its Bluemix services for the web UI
+    watson = WatsonEnv.get_watson_online_store()
+
     if watson:
-        # Run the slack bot in the background if env setup succeeded
-        socketio.start_background_task(watson.run)
+        # If env setup succeeded, get another instance to use for slack.
+        # Separate instances to keep the web UI identity separate from
+        # the slack user.
+        slack_wos = WatsonEnv.get_watson_online_store()
+        socketio.start_background_task(slack_wos.run)
     else:
         print('Slack integration is not started because of missing environment'
               ' variables.')

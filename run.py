@@ -19,6 +19,32 @@ class WatsonEnv:
         pass
 
     @staticmethod
+    def get_slack_user_id(slack_client):
+        """Get slack bot user ID from SLACK_BOT_USER or BOT_ID env vars.
+
+        Use the original BOT_ID if found, but now we can instead take the
+        SLACK_BOT_USER (familiar bot name) and look-up the ID.
+        This should be called after env is loaded when using dotenv.
+        """
+        slack_bot_user = os.environ.get('SLACK_BOT_USER')
+        print("Looking up BOT_ID for '%s'" % slack_bot_user)
+
+        api_call = slack_client.api_call("users.list")
+        if api_call.get('ok'):
+            # retrieve all users so we can find our bot
+            users = api_call.get('members')
+            for user in users:
+                if 'name' in user and user.get('name') == slack_bot_user:
+                    bot_id = user.get('id')
+                    print("Found BOT_ID=" + bot_id)
+                    return bot_id
+            else:
+                print("could not find user with the name " + slack_bot_user)
+        else:
+            print("could not find user because api_call did not return 'ok'")
+        return None
+
+    @staticmethod
     def get_watson_online_store():
         load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -31,8 +57,7 @@ class WatsonEnv:
         cloudant_password = os.environ.get("CLOUDANT_PASSWORD")
         cloudant_url = os.environ.get("CLOUDANT_URL")
         cloudant_db_name = os.environ.get("CLOUDANT_DB_NAME")
-        if not all((bot_id,
-                    slack_bot_token,
+        if not all((slack_bot_token,
                     conversation_username,
                     conversation_password,
                     cloudant_username,
@@ -42,7 +67,12 @@ class WatsonEnv:
             print(MISSING_ENV_VARS)
             return None
 
+        # If BOT_ID wasn't set, we can get it using SlackClient and user ID.
         slack_client = SlackClient(slack_bot_token)
+        if not bot_id:
+            bot_id = WatsonEnv.get_slack_user_id(slack_client)
+            if not bot_id:
+                return None
 
         conversation_client = ConversationV1(
             username=conversation_username,

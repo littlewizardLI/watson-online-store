@@ -326,7 +326,7 @@ class WatsonOnlineStore:
                     print("slack output\n:{}\n".format(slack_output))
 
                 message, channel, user = self.parse_slack_output(slack_output)
-                if not self.customer:
+                if user and not self.customer:
                     self.init_customer(user)
 
                 if DEBUG and message:
