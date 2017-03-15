@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import json
 import os
 from cloudant.client import Cloudant
 from dotenv import load_dotenv
@@ -17,6 +18,15 @@ class WatsonEnv:
 
     def __init__(self):
         pass
+
+    @staticmethod
+    def get_vcap_credentials(vcap_env, service):
+        if service in vcap_env:
+            vcap_conversation = vcap_env[service]
+            if isinstance(vcap_conversation, list):
+                first = vcap_conversation[0]
+                if 'credentials' in first:
+                    return first['credentials']
 
     @staticmethod
     def get_slack_user_id(slack_client):
@@ -48,7 +58,11 @@ class WatsonEnv:
     def get_watson_online_store():
         load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-        # Get all the required environment vars
+        print("+++++++DUMPENV++++++++++++++++++++++++++++++++==")
+        print(os.environ)
+        print("+++++++DUMPENV++++++++++++++++++++++++++++++++==")
+
+        # Use these env vars first if set
         bot_id = os.environ.get("BOT_ID")
         slack_bot_token = os.environ.get('SLACK_BOT_TOKEN')
         conversation_username = os.environ.get("CONVERSATION_USERNAME")
@@ -57,6 +71,56 @@ class WatsonEnv:
         cloudant_password = os.environ.get("CLOUDANT_PASSWORD")
         cloudant_url = os.environ.get("CLOUDANT_URL")
         cloudant_db_name = os.environ.get("CLOUDANT_DB_NAME")
+
+        # TODO: It looks like we'll want to make discovery required too.
+        discovery_username = os.environ.get('DISCOVERY_USERNAME')
+        discovery_password = os.environ.get('DISCOVERY_PASSWORD')
+        discovery_environment_id = os.environ.get('DISCOVERY_ENVIRONMENT_ID')
+        discovery_collection_id = os.environ.get('DISCOVERY_COLLECTION_ID')
+
+        if not all((conversation_username,
+                    conversation_password,
+                    cloudant_username,
+                    cloudant_password,
+                    cloudant_url,
+                    discovery_username,
+                    discovery_password)):
+            # If some of the service env vars are not set get them from VCAP
+            vcap_env = None
+            vcap_services = os.environ.get("VCAP_SERVICES")
+            print('===========================================')
+            print("VCAP_SERVICES")
+            print('===========================================')
+            print(vcap_services)
+            print('===========================================')
+            if vcap_services:
+                vcap_env = json.loads(vcap_services)
+                print(vcap_env)
+            print('===========================================')
+            if vcap_env:
+                conversation_creds = WatsonEnv.get_vcap_credentials(
+                    vcap_env, 'conversation')
+                conversation_username = \
+                    conversation_username or conversation_creds['username']
+                conversation_password = \
+                    conversation_password or conversation_creds['password']
+
+                cloudant_creds = WatsonEnv.get_vcap_credentials(
+                    vcap_env, 'cloudantNoSQLDB')
+                cloudant_username = \
+                    cloudant_username or cloudant_creds['username']
+                cloudant_password = \
+                    cloudant_password or cloudant_creds['password']
+                cloudant_url = cloudant_url or cloudant_creds['url']
+
+                discovery_creds = WatsonEnv.get_vcap_credentials(
+                    vcap_env, 'discovery')
+                discovery_username = \
+                    discovery_username or discovery_creds['username']
+                discovery_password = \
+                    discovery_password or discovery_creds['password']
+
+        # If we still don't have all the above plus a few, then no WOS.
         if not all((slack_bot_token,
                     conversation_username,
                     conversation_password,
@@ -72,6 +136,7 @@ class WatsonEnv:
         if not bot_id:
             bot_id = WatsonEnv.get_slack_user_id(slack_client)
             if not bot_id:
+                print("Error: Missing BOT_ID or invalid SLACK_BOT_USER.")
                 return None
 
         conversation_client = ConversationV1(
@@ -91,10 +156,6 @@ class WatsonEnv:
         #
         # Init Watson Discovery only if all the env vars are set.
         #
-        discovery_username = os.environ.get('DISCOVERY_USERNAME')
-        discovery_password = os.environ.get('DISCOVERY_PASSWORD')
-        discovery_environment_id = os.environ.get('DISCOVERY_ENVIRONMENT_ID')
-        discovery_collection_id = os.environ.get('DISCOVERY_COLLECTION_ID')
         discovery_client = None
         if all((discovery_username,
                 discovery_password,
